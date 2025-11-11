@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "ai-daily-planner-backend"
+version = "0.1.0"
+description = "FastAPI backend for the AI Daily Planner MVP."
+authors = ["Alex Arevalo"]
+license = "MIT"
+readme = "../README.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+uvicorn = { version = "^0.29.0", extras = ["standard"] }
+sqlalchemy = "^2.0.29"
+alembic = "^1.13.1"
+psycopg = {version = "^3.1.18", extras = ["binary"]}
+python-dotenv = "^1.0.1"
+apscheduler = "^3.10.4"
+pydantic-settings = "^2.2.1"
+email-validator = "^2.1.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+pytest-asyncio = "^0.23.6"
+httpx = "^0.27.0"
+ruff = "^0.3.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
