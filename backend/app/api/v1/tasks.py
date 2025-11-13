@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
-from app.schemas.task import TaskCreate, TaskRead
+from app.schemas.task import CarryForwardRequest, TaskCreate, TaskRead, TaskUpdate
 from app.services import tasks as task_service
 from app.services import users as user_service
 
@@ -32,4 +32,21 @@ def list_tasks(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     tasks = task_service.list_tasks_for_day(db, user_id=user_id, scheduled_day=scheduled_date)
+    return [task_service.serialize_task(t) for t in tasks]
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskRead)
+def update_task(task_id: str, payload: TaskUpdate, db: Session = Depends(get_db_session)) -> TaskRead:
+    task = task_service.update_task(db, task_id, payload)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return task_service.serialize_task(task)
+
+
+@router.post("/tasks/carry-forward", response_model=list[TaskRead])
+def carry_forward_tasks(payload: CarryForwardRequest, db: Session = Depends(get_db_session)) -> list[TaskRead]:
+    if user_service.get_user(db, payload.user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    tasks = task_service.carry_forward_tasks(db, payload)
     return [task_service.serialize_task(t) for t in tasks]

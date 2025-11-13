@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./planner.db")
     resend_api_key: str | None = None
     daily_brief_default_send_hour: int = Field(default=7, ge=0, le=23)
+    openai_api_key: str | None = Field(default=None)
+    openai_model: str = Field(default="gpt-4o-mini")
+    google_project_id: str | None = None
+    google_location: str = Field(default="us")
+    google_processor_id: str | None = None
+    google_credentials_path: str | None = None
 
     @property
     def base_path(self) -> Path:

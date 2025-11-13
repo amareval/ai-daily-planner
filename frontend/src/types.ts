@@ -14,6 +14,7 @@ export type Task = {
   estimatedMinutes?: number;
   status: "pending" | "complete" | "deferred";
   source: "manual" | "pdf";
+  pdfIngestionId?: string | null;
 };
 
 export type DailyAvailability = {
@@ -36,6 +37,7 @@ export type DailyBrief = {
 };
 
 export type PlannerState = {
+  userId?: string;
   userEmail?: string;
   fullName?: string;
   timezone?: string;

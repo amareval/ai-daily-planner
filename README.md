@@ -1,11 +1,19 @@
 # AI Daily Planner
 
-Daily planning agent that helps unemployed professionals stay focused on their primary goal—landing a job—by organizing their tasks and proposing productive learning opportunities.
+AI agent that tracks and manages your to-dos while surfacing recommended actions to keep any professional moving toward their goals.
+
+### Latest Backend Capabilities
+
+- PDF ingestion API converts Remarkable exports into structured to-dos, storing provenance for each task.
+- Task API supports status updates plus a “carry-forward” helper so unfinished work automatically rolls into the next day.
+- Uploaded files are parsed with `pypdf`, and handwriting-only PDFs fall back to Tesseract OCR (`pytesseract` + `pdf2image`); durations like `(30m)` are plucked out as optional estimates.
+
+> Local dev tip: delete `backend/planner.db` if migrations fail mid-upgrade; then run `poetry run alembic upgrade head` again.
 
 ## Core Experience
 
-- **Ultimate goal banner** persists across the product and anchors all planning decisions.
-- **Morning brief** (email + optional web view) outlines the day: carried-forward to-dos, estimated time, and 2–3 curated learning opportunities sized to the user’s available hours.
+- **Ultimate goal banner** keeps the mission visible so every task and suggestion ladders up to it.
+- **Morning brief** (email + optional web view) outlines the day: carried-forward to-dos and 2–3 curated learning opportunities sized to the user’s available hours.
 - **Evening capture** accepts tomorrow’s plan via Remarkable PDF upload or manual entry, plus an “extra learning time” input.
 
 ### Daily Flow
@@ -155,6 +163,8 @@ Learning Content Pipelines ────┴──▶ Recommendation Engine
   4. Morning brief preview → `POST /api/v1/briefs`
   5. PDF upload placeholder → upcoming `POST /api/v1/uploads/pdf`
 - Daily tab also includes an experimental AI Copilot chat surface; today it uses mocked responses and can be triggered from a task card (“Ask AI for help”) to explore the future task-driving experience.
+- Set `VITE_API_BASE_URL` (defaults to `http://127.0.0.1:8000`) so the PDF uploader and carry-forward actions hit the FastAPI backend in dev.
+- Backend enables CORS for `http://localhost:5173` and `http://127.0.0.1:5173`; tweak `app/main.py` if you serve the frontend from a different origin.
 
 ## Development Setup
 
@@ -167,3 +177,6 @@ Learning Content Pipelines ────┴──▶ Recommendation Engine
    - `cd ../frontend`
    - `npm install`
    - `npm run dev` to launch the Vite app with mocked planner flows
+7. OCR requirements for handwriting PDFs:
+   - Install Tesseract CLI (e.g., `brew install tesseract`)
+   - Install Poppler for `pdf2image` (e.g., `brew install poppler`)

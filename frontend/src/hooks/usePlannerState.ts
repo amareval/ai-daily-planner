@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { create } from "zustand";
 import { formatISO } from "date-fns";
 
@@ -15,16 +15,22 @@ type PlannerActions = {
   updateAvailability: (minutes: number) => void;
   generateBrief: () => DailyBrief;
   reorderTasks: (orderedIds: string[]) => void;
+  setTasks: (tasks: Task[]) => void;
 };
+
+const envUserId = import.meta.env.VITE_USER_ID;
+const defaultUserId = typeof envUserId === "string" && envUserId.length > 0 ? envUserId : "demo-user";
 
 export const usePlannerStore = create<PlannerState & PlannerActions>((set, get) => ({
   tasks: [],
+  userId: defaultUserId,
   bootstrapDemo: () =>
     set({
       goal: mockGoal,
       tasks: mockTasks,
       availability: mockAvailability,
       brief: mockBrief,
+      userId: defaultUserId,
       userEmail: "demo@planner.ai",
       fullName: "Demo Candidate",
       timezone: "America/Los_Angeles",
@@ -78,15 +84,19 @@ export const usePlannerStore = create<PlannerState & PlannerActions>((set, get) 
         tasks: orderedIds.map((id) => taskMap[id]).filter(Boolean),
       };
     }),
+  setTasks: (tasks) => set({ tasks }),
 }));
 
 export const usePlannerState = () => {
   const store = usePlannerStore();
 
-  return useMemo(
-    () => ({
-      ...store,
-    }),
-    [store],
-  );
+  const memoized = useMemo(() => ({ ...store }), [store]);
+
+  useEffect(() => {
+    if (!memoized.tasks.length) {
+      memoized.bootstrapDemo();
+    }
+  }, [memoized]);
+
+  return memoized;
 };

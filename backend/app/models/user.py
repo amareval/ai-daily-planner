@@ -26,6 +26,9 @@ class User(Base):
     daily_availability: Mapped[list["DailyAvailability"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", order_by="DailyAvailability.day"
     )
+    pdf_ingestions: Mapped[list["PDFIngestion"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", order_by="PDFIngestion.created_at"
+    )
 
 
 class Goal(Base):

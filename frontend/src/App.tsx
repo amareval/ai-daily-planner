@@ -1,7 +1,7 @@
 import { format, formatISO } from "date-fns";
 import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
-import type { ChatMessage, DailyBrief, Goal } from "./types";
+import type { ChatMessage, DailyBrief, Goal, Task } from "./types";
 import { AvailabilityCard } from "./components/AvailabilityCard";
 import { BriefPreview } from "./components/BriefPreview";
 import { ChatPanel } from "./components/ChatPanel";
@@ -11,6 +11,7 @@ import { PdfUploadCard } from "./components/PdfUploadCard";
 import { TaskComposer } from "./components/TaskComposer";
 import { TaskList } from "./components/TaskList";
 import { usePlannerStore } from "./hooks/usePlannerState";
+import { plannerApi } from "./lib/api";
 
 type Tab = "daily" | "settings";
 type GoalFormValues = Goal & { timezone?: string; fullName?: string };
@@ -21,6 +22,11 @@ const App = () => {
   const todayLabel = format(new Date(), "MMMM d, yyyy");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{ message: string; variant: "neutral" | "success" | "error" }>({
+    message: "No upload yet",
+    variant: "neutral",
+  });
+  const [carryForwardStatus, setCarryForwardStatus] = useState<string | null>(null);
   const {
     goal,
     tasks,
@@ -28,7 +34,6 @@ const App = () => {
     brief,
     fullName,
     timezone,
-    bootstrapDemo,
     updateGoal,
     updateProfile,
     addTask,
@@ -36,11 +41,9 @@ const App = () => {
     updateAvailability,
     generateBrief,
     reorderTasks,
+    userId,
+    setTasks,
   } = usePlannerStore();
-
-  useEffect(() => {
-    bootstrapDemo();
-  }, [bootstrapDemo]);
 
   const handleGoalSubmit = (values: GoalFormValues) => {
     const { fullName: name, timezone: tz, ...goalPayload } = values;
@@ -81,6 +84,67 @@ const App = () => {
     setActiveTab("daily");
   };
 
+  const mapTaskFromApi = (apiTask: any): Task => ({
+    id: apiTask.id,
+    title: apiTask.title,
+    notes: apiTask.notes ?? undefined,
+    scheduledDate: apiTask.scheduled_date,
+    estimatedMinutes: apiTask.estimated_minutes ?? undefined,
+    status: apiTask.status,
+    source: apiTask.source,
+    pdfIngestionId: apiTask.pdf_ingestion_id,
+  });
+
+  const refreshTasksFromApi = async () => {
+    if (!userId) return;
+    try {
+      const apiTasks = await plannerApi.fetchTasks({ userId, scheduledDate: today });
+      if (apiTasks.length) {
+        const mappedApi = apiTasks.map(mapTaskFromApi);
+        const knownIds = new Set(mappedApi.map((task) => task.id));
+        const localOnly = tasks.filter((task) => !knownIds.has(task.id));
+        setTasks([...localOnly, ...mappedApi]);
+      }
+    } catch (error) {
+      console.warn("Falling back to local tasks; fetch failed:", error);
+    }
+  };
+
+  useEffect(() => {
+    refreshTasksFromApi();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, today]);
+
+  const handlePdfUpload = async (file: File) => {
+    if (!userId) {
+      setUploadStatus({ message: "No user ID set", variant: "error" });
+      return;
+    }
+    setUploadStatus({ message: `Parsing ${file.name}...`, variant: "neutral" });
+    try {
+      const response = await plannerApi.uploadPdf({ userId, scheduledDate: today, file });
+      setUploadStatus({
+        message: `Parsed ${response.parsed_task_count ?? response.tasks_created?.length ?? 0} tasks from ${file.name}`,
+        variant: "success",
+      });
+      await refreshTasksFromApi();
+    } catch (error: any) {
+      setUploadStatus({ message: `Upload failed: ${error.message || "Unknown error"}`, variant: "error" });
+    }
+  };
+
+  const handleCarryForward = async () => {
+    if (!userId) return;
+    setCarryForwardStatus("Moving incomplete tasks…");
+    try {
+      const moved = await plannerApi.carryForward({ userId, fromDate: today });
+      setCarryForwardStatus(`Moved ${moved.length} tasks to tomorrow.`);
+      await refreshTasksFromApi();
+    } catch (error: any) {
+      setCarryForwardStatus(`Carry-forward failed: ${error.message || "Unknown error"}`);
+    }
+  };
+
   const handleAddRecommendation = (suggestion: DailyBrief["learningSuggestions"][number]) => {
     addTask({
       title: suggestion.title,
@@ -101,6 +165,24 @@ const App = () => {
 
         <div className="surface">
           <h3 style={{ marginTop: 0 }}>Today's Tasks</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+            <p style={{ margin: 0, color: "#475569" }}>Rank tasks, click to ask AI for help, or keep adding more.</p>
+            <button
+              onClick={handleCarryForward}
+              style={{
+                border: "1px solid #cbd5f5",
+                background: "#e0e7ff",
+                color: "#312e81",
+                borderRadius: "999px",
+                padding: "0.35rem 0.9rem",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Carry forward incomplete
+            </button>
+          </div>
+          {carryForwardStatus && <small style={{ color: "#475569" }}>{carryForwardStatus}</small>}
           <TaskList
             tasks={tasks}
             onToggle={toggleTaskStatus}
@@ -115,14 +197,9 @@ const App = () => {
         <BriefPreview brief={brief} onGenerate={generateBrief} onAddSuggestion={handleAddRecommendation} />
 
         <PdfUploadCard
-          onMockParse={(generated) => {
-            for (let index = 0; index < generated; index += 1) {
-              addTask({
-                title: `Parsed task ${index + 1}`,
-                scheduledDate: today,
-              });
-            }
-          }}
+          statusMessage={uploadStatus.message}
+          statusVariant={uploadStatus.variant}
+          onUpload={handlePdfUpload}
         />
       </div>
       <div className="daily-chat">
