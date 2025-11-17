@@ -50,3 +50,10 @@ def carry_forward_tasks(payload: CarryForwardRequest, db: Session = Depends(get_
 
     tasks = task_service.carry_forward_tasks(db, payload)
     return [task_service.serialize_task(t) for t in tasks]
+
+
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: str, db: Session = Depends(get_db_session)) -> None:
+    deleted = task_service.delete_task(db, task_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

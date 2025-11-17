@@ -38,6 +38,7 @@ class Goal(Base):
     target_role: Mapped[str | None] = mapped_column(String(255))
     industry: Mapped[str | None] = mapped_column(String(255))
     skills_focus: Mapped[str | None] = mapped_column(Text)
+    secondary_goals: Mapped[str | None] = mapped_column(Text)
     default_learning_minutes: Mapped[int | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -5,8 +5,8 @@ AI agent that tracks and manages your to-dos while surfacing recommended actions
 ### Latest Backend Capabilities
 
 - PDF ingestion API converts Remarkable exports into structured to-dos, storing provenance for each task.
-- Task API supports status updates plus a “carry-forward” helper so unfinished work automatically rolls into the next day.
-- Uploaded files are parsed with `pypdf`, and handwriting-only PDFs fall back to Tesseract OCR (`pytesseract` + `pdf2image`); durations like `(30m)` are plucked out as optional estimates.
+- Task API supports status updates, deletions, and a “carry-forward” helper so unfinished work automatically rolls into the next day.
+- Uploaded files now run through **Google Document AI** for handwriting OCR, with EasyOCR + Tesseract as local fallbacks. Bounding boxes power a custom strikethrough detector, and an LLM cleanup pass fixes spelling while keeping meaning.
 
 > Local dev tip: delete `backend/planner.db` if migrations fail mid-upgrade; then run `poetry run alembic upgrade head` again.
 
@@ -78,7 +78,7 @@ Learning Content Pipelines ────┴──▶ Recommendation Engine
 | Layer | Technology | Notes |
 | --- | --- | --- |
 | Email ingestion | Gmail API webhook or AWS SES inbound | Stores PDFs + metadata in object storage (S3/Supabase) |
-| PDF/OCR | `pypdf` + Tesseract/AWS Textract | Structured output with confidence scoring |
+| PDF/OCR | Document AI (primary) → EasyOCR/Tesseract fallback | Document AI handwriting OCR, strikethrough detection, LLM cleanup |
 | Backend | FastAPI / Node (NestJS) | Hosts parsing endpoints, task CRUD, recommendation engine |
 | Storage | Postgres (Supabase) | Tables: users, goals, tasks, daily_availability, learning_history |
 | Learning content | Curated feed + optional web search (SerpAPI/Bing) | Cached metadata to avoid repeated fetching |
@@ -180,3 +180,13 @@ Learning Content Pipelines ────┴──▶ Recommendation Engine
 7. OCR requirements for handwriting PDFs:
    - Install Tesseract CLI (e.g., `brew install tesseract`)
    - Install Poppler for `pdf2image` (e.g., `brew install poppler`)
+   - (Optional) Enable Google Document AI for best accuracy:
+     - Create a Document AI processor (Handwriting OCR) and service account
+     - Set in `backend/.env`:
+       ```
+       GOOGLE_PROJECT_ID=your-project-id
+       GOOGLE_LOCATION=us
+       GOOGLE_PROCESSOR_ID=xxxxxxxxxxxx
+       GOOGLE_CREDENTIALS_PATH=/abs/path/to/service-account.json
+       ```
+     - `poetry lock && poetry install` after updating dependencies

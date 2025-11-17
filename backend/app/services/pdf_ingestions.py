@@ -177,20 +177,25 @@ def _detect_strikethrough(image: Image.Image, bbox: list[int]) -> bool:
     height = y2 - y1
     if width <= 0 or height <= 0:
         return False
-    band_height = max(1, int(height * 0.08))
-    center_y = y1 + int(height * 0.82)
-    top = max(y1, center_y - band_height // 2)
-    bottom = min(y2, center_y + band_height // 2)
-    if bottom <= top:
+    crop = image.crop((x1, y1, x2, y2))
+    arr = np.array(crop)
+    if arr.ndim == 3:
+        arr = arr[..., 0]
+    if arr.size == 0:
         return False
-    sample = image.crop((x1, top, x2, bottom))
-    pixels = list(sample.getdata())
-    if not pixels:
+    row_dark = (arr < 90).mean(axis=1)
+    dark_rows = np.where(row_dark > 0.65)[0]
+    if not len(dark_rows):
         return False
-    dark_pixels = sum(1 for value in pixels if value < 85)
-    dark_ratio = dark_pixels / len(pixels)
-    aspect_ratio = width / max(1, band_height)
-    return dark_ratio > 0.45 and aspect_ratio > 6
+    contiguous = 1
+    best = 1
+    for idx in range(1, len(dark_rows)):
+        if dark_rows[idx] == dark_rows[idx - 1] + 1:
+            contiguous += 1
+            best = max(best, contiguous)
+        else:
+            contiguous = 1
+    return best >= max(1, int(height * 0.05)) and best <= int(height * 0.4)
 
 
 def _normalized_bbox_to_pixels(bbox: list[tuple[float, float]], size: tuple[int, int]) -> list[int]:

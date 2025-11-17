@@ -1,13 +1,20 @@
 import { formatISO } from "date-fns";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   onAdd: (input: { title: string; scheduledDate: string }) => void;
+  selectedDate?: string;
 };
 
-export const TaskComposer = ({ onAdd }: Props) => {
+export const TaskComposer = ({ onAdd, selectedDate }: Props) => {
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState<string>(formatISO(new Date(), { representation: "date" }));
+  const [date, setDate] = useState<string>(selectedDate ?? formatISO(new Date(), { representation: "date" }));
+
+  useEffect(() => {
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   const handleAdd = () => {
     if (!title.trim()) return;

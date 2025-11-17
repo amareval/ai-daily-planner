@@ -30,11 +30,12 @@ def use_document_ai(pdf_path: Path) -> list[dict]:
 
     lines: list[dict] = []
     for page_index, page in enumerate(document.pages):
-        for paragraph in page.paragraphs:
-            text = _layout_to_text(paragraph.layout, document)
+        source_elements = page.lines if page.lines else page.paragraphs
+        for element in source_elements:
+            text = _layout_to_text(element.layout, document)
             if not text.strip():
                 continue
-            bbox = _extract_normalized_bbox(paragraph.layout)
+            bbox = _extract_normalized_bbox(element.layout)
             lines.append({"text": text.strip(), "bbox": bbox, "page_index": page_index})
     return lines
 

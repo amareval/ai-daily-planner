@@ -26,6 +26,7 @@ def upsert_user_with_goal(db: Session, payload: UserCreate) -> User:
             target_role=payload.goal.target_role,
             industry=payload.goal.industry,
             skills_focus=payload.goal.skills_focus,
+            secondary_goals=payload.goal.secondary_goals,
             default_learning_minutes=payload.goal.default_learning_minutes,
         )
         db.add(goal)
@@ -42,6 +43,7 @@ def get_user(db: Session, user_id: str) -> User | None:
 def serialize_goal(goal: Goal) -> GoalRead:
     return GoalRead(
         id=goal.id,
+        secondary_goals=goal.secondary_goals,
         goal_statement=goal.goal_statement,
         target_role=goal.target_role,
         industry=goal.industry,

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.build/
+.next/
+coverage/
+__pycache__/
+*.pyc
+.venv/
+venv/
+playwright-report/
+test-results/
+shots/
+logs/
+.DS_Store
+.vscode/
+.idea/

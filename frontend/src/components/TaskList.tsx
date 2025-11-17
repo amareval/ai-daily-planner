@@ -23,6 +23,7 @@ type Props = {
   onToggle: (taskId: string) => void;
   onReorder: (orderedIds: string[]) => void;
   onAsk?: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
   title?: string;
   dateFilter?: string;
   collapseAfter?: number;
@@ -33,7 +34,8 @@ export const TaskList = ({
   onToggle,
   onReorder,
   onAsk,
-  title = "Today's Tasks",
+  onDelete,
+  title,
   dateFilter,
   collapseAfter = 8,
 }: Props) => {
@@ -69,10 +71,12 @@ export const TaskList = ({
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h3 style={{ marginTop: 0 }}>{title}</h3>
-        <p style={{ color: "#94a3b8" }}>{filtered.length} items</p>
-      </div>
+      {title && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <h3 style={{ marginTop: 0 }}>{title}</h3>
+          <p style={{ color: "#94a3b8" }}>{filtered.length} items</p>
+        </div>
+      )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={visibleTasks.map((task) => task.id)} strategy={rectSortingStrategy}>
           <ul
@@ -86,7 +90,7 @@ export const TaskList = ({
             }}
           >
             {visibleTasks.map((task) => (
-              <SortableTaskCard key={task.id} task={task} onToggle={onToggle} onAsk={onAsk} />
+              <SortableTaskCard key={task.id} task={task} onToggle={onToggle} onAsk={onAsk} onDelete={onDelete} />
             ))}
           </ul>
         </SortableContext>
@@ -129,9 +133,10 @@ type CardProps = {
   task: Task;
   onToggle: (taskId: string) => void;
   onAsk?: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
 };
 
-const SortableTaskCard = ({ task, onToggle, onAsk }: CardProps) => {
+const SortableTaskCard = ({ task, onToggle, onAsk, onDelete }: CardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style: CSSProperties = {
     ...cardStyle,
@@ -161,11 +166,18 @@ const SortableTaskCard = ({ task, onToggle, onAsk }: CardProps) => {
               <small style={{ color: "#475569" }}>Created: {task.scheduledDate} &bull; Source: {task.source}</small>
             </div>
           </div>
-          {onAsk && (
-            <button style={askButton} type="button" onClick={() => onAsk(task)}>
-              Ask AI
-            </button>
-          )}
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            {onAsk && (
+              <button style={askButton} type="button" onClick={() => onAsk(task)}>
+                Ask AI
+              </button>
+            )}
+            {onDelete && (
+              <button style={deleteButton} type="button" onClick={() => onDelete(task.id)}>
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <span style={{ cursor: "grab", color: "#94a3b8", fontSize: "1.25rem" }}>⋮⋮</span>
@@ -182,4 +194,15 @@ const askButton: CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
   fontSize: "0.85rem",
+};
+
+const deleteButton: CSSProperties = {
+  background: "#fee2e2",
+  color: "#b91c1c",
+  border: "none",
+  borderRadius: "999px",
+  padding: "0.25rem 0.7rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  fontSize: "0.8rem",
 };

@@ -57,6 +57,15 @@ def carry_forward_tasks(db: Session, request: CarryForwardRequest) -> list[Task]
     return tasks
 
 
+def delete_task(db: Session, task_id: str) -> bool:
+    task = db.get(Task, task_id)
+    if task is None:
+        return False
+    db.delete(task)
+    db.commit()
+    return True
+
+
 def serialize_task(task: Task) -> TaskRead:
     return TaskRead(
         id=task.id,

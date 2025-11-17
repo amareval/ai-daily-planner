@@ -36,6 +36,21 @@ export type DailyBrief = {
   learningSuggestions: LearningSuggestion[];
 };
 
+export type RecommendationTodo = {
+  title: string;
+  description: string;
+  category: string;
+  estimatedMinutes: number;
+  resourceUrl?: string;
+};
+
+export type RecommendationsResponse = {
+  userId: string;
+  scheduledDate: string;
+  goalStatement: string;
+  recommendedTodos: RecommendationTodo[];
+};
+
 export type PlannerState = {
   userId?: string;
   userEmail?: string;

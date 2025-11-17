@@ -8,6 +8,7 @@ class GoalCreate(BaseModel):
     target_role: str | None = None
     industry: str | None = None
     skills_focus: str | None = None
+    secondary_goals: str | None = None
     default_learning_minutes: int | None = Field(default=120, ge=0)
 
 

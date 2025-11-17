@@ -1,7 +1,7 @@
-import { format, formatISO } from "date-fns";
+import { format, formatISO, parseISO } from "date-fns";
 import { nanoid } from "nanoid";
-import { useEffect, useState } from "react";
-import type { ChatMessage, DailyBrief, Goal, Task } from "./types";
+import { useCallback, useEffect, useState } from "react";
+import type { ChatMessage, Goal, RecommendationTodo, RecommendationsResponse, Task } from "./types";
 import { AvailabilityCard } from "./components/AvailabilityCard";
 import { BriefPreview } from "./components/BriefPreview";
 import { ChatPanel } from "./components/ChatPanel";
@@ -17,9 +17,9 @@ type Tab = "daily" | "settings";
 type GoalFormValues = Goal & { timezone?: string; fullName?: string };
 
 const App = () => {
-  const today = formatISO(new Date(), { representation: "date" });
   const [activeTab, setActiveTab] = useState<Tab>("daily");
-  const todayLabel = format(new Date(), "MMMM d, yyyy");
+  const [selectedDate, setSelectedDate] = useState(formatISO(new Date(), { representation: "date" }));
+  const selectedDateLabel = format(parseISO(selectedDate), "MMMM d, yyyy");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<{ message: string; variant: "neutral" | "success" | "error" }>({
@@ -27,11 +27,13 @@ const App = () => {
     variant: "neutral",
   });
   const [carryForwardStatus, setCarryForwardStatus] = useState<string | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [isFetchingRecommendations, setIsFetchingRecommendations] = useState(false);
   const {
     goal,
     tasks,
     availability,
-    brief,
     fullName,
     timezone,
     updateGoal,
@@ -39,7 +41,6 @@ const App = () => {
     addTask,
     toggleTaskStatus,
     updateAvailability,
-    generateBrief,
     reorderTasks,
     userId,
     setTasks,
@@ -98,7 +99,7 @@ const App = () => {
   const refreshTasksFromApi = async () => {
     if (!userId) return;
     try {
-      const apiTasks = await plannerApi.fetchTasks({ userId, scheduledDate: today });
+      const apiTasks = await plannerApi.fetchTasks({ userId, scheduledDate: selectedDate });
       if (apiTasks.length) {
         const mappedApi = apiTasks.map(mapTaskFromApi);
         const knownIds = new Set(mappedApi.map((task) => task.id));
@@ -110,10 +111,36 @@ const App = () => {
     }
   };
 
+  const refreshRecommendations = useCallback(async () => {
+    if (!userId || !goal) {
+      return;
+    }
+    setIsFetchingRecommendations(true);
+    try {
+      const response = await plannerApi.fetchRecommendations({
+        userId,
+        scheduledDate: selectedDate,
+        primaryGoal: goal.primaryGoal,
+        secondaryGoals: goal.secondaryGoals,
+        skillsFocus: goal.skillsFocus,
+      });
+      setRecommendations(response);
+      setRecommendationsError(null);
+    } catch (error: any) {
+      setRecommendationsError(error.message || "Unable to load recommendations");
+    } finally {
+      setIsFetchingRecommendations(false);
+    }
+  }, [goal?.primaryGoal, goal?.secondaryGoals, goal?.skillsFocus, selectedDate, userId]);
+
   useEffect(() => {
     refreshTasksFromApi();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, today]);
+  }, [userId, selectedDate]);
+
+  useEffect(() => {
+    void refreshRecommendations();
+  }, [refreshRecommendations]);
 
   const handlePdfUpload = async (file: File) => {
     if (!userId) {
@@ -122,7 +149,7 @@ const App = () => {
     }
     setUploadStatus({ message: `Parsing ${file.name}...`, variant: "neutral" });
     try {
-      const response = await plannerApi.uploadPdf({ userId, scheduledDate: today, file });
+      const response = await plannerApi.uploadPdf({ userId, scheduledDate: selectedDate, file });
       setUploadStatus({
         message: `Parsed ${response.parsed_task_count ?? response.tasks_created?.length ?? 0} tasks from ${file.name}`,
         variant: "success",
@@ -137,7 +164,7 @@ const App = () => {
     if (!userId) return;
     setCarryForwardStatus("Moving incomplete tasks…");
     try {
-      const moved = await plannerApi.carryForward({ userId, fromDate: today });
+      const moved = await plannerApi.carryForward({ userId, fromDate: selectedDate });
       setCarryForwardStatus(`Moved ${moved.length} tasks to tomorrow.`);
       await refreshTasksFromApi();
     } catch (error: any) {
@@ -145,12 +172,49 @@ const App = () => {
     }
   };
 
-  const handleAddRecommendation = (suggestion: DailyBrief["learningSuggestions"][number]) => {
+  const handleAddRecommendation = (suggestion: RecommendationTodo) => {
     addTask({
       title: suggestion.title,
-      scheduledDate: today,
+      scheduledDate: selectedDate,
+      notes: suggestion.description,
     });
     setActiveTab("daily");
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await plannerApi.deleteTask(taskId);
+      setTasks(tasks.filter((task) => task.id !== taskId));
+    } catch (error) {
+      console.warn("Delete failed:", error);
+    }
+  };
+
+  const handleToggleTaskStatus = async (taskId: string) => {
+    const current = tasks.find((task) => task.id === taskId);
+    if (!current) return;
+    const nextStatus = current.status === "complete" ? "pending" : "complete";
+    try {
+      await plannerApi.updateTask(taskId, { status: nextStatus });
+      setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: nextStatus } : task)));
+    } catch (error) {
+      console.warn("Status update failed:", error);
+    }
+  };
+
+  const handleCreateTask = async ({ title, scheduledDate }: { title: string; scheduledDate: string }) => {
+    if (!userId) return;
+    try {
+      const apiTask = await plannerApi.createTask({ userId, title, scheduledDate });
+      setTasks([...tasks, mapTaskFromApi(apiTask)]);
+    } catch (error) {
+      console.warn("Create task failed:", error);
+    }
+  };
+
+  const handleDateChange = (value: string) => {
+    setSelectedDate(value);
+    setCarryForwardStatus(null);
   };
 
   const dailyView = (
@@ -158,15 +222,48 @@ const App = () => {
       <div className="daily-main">
         <header>
           <p style={{ textTransform: "uppercase", letterSpacing: "0.1em", color: "#94a3b8", margin: 0 }}>Daily</p>
-          <h1 style={{ margin: "0.35rem 0 0" }}>Daily Plan - {todayLabel}</h1>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+            <h1 style={{ margin: "0.35rem 0 0" }}>Daily Plan - {selectedDateLabel}</h1>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => handleDateChange(event.target.value)}
+              style={{
+                border: "1px solid #cbd5f5",
+                borderRadius: "8px",
+                padding: "0.4rem 0.6rem",
+                fontSize: "1rem",
+              }}
+            />
+          </div>
         </header>
 
         <GoalBanner goal={goal} />
 
         <div className="surface">
-          <h3 style={{ marginTop: 0 }}>Today's Tasks</h3>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-            <p style={{ margin: 0, color: "#475569" }}>Rank tasks, click to ask AI for help, or keep adding more.</p>
+            <div>
+              <h3 style={{ margin: "0 0 0.35rem" }}>Today's To-Do</h3>
+              <p style={{ margin: 0, color: "#475569" }}>Rank tasks, click to ask AI for help, or keep adding more.</p>
+            </div>
+            <span style={{ color: "#94a3b8" }}>
+              {tasks.filter((task) => task.scheduledDate === selectedDate).length} items
+            </span>
+          </div>
+          {carryForwardStatus && <small style={{ color: "#475569" }}>{carryForwardStatus}</small>}
+          <TaskList
+            tasks={tasks}
+            onToggle={handleToggleTaskStatus}
+            onReorder={reorderTasks}
+            onAsk={(task) => handleAskForTask(task.title)}
+            onDelete={handleDeleteTask}
+            dateFilter={selectedDate}
+            title={undefined}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", gap: "1rem", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 300 }}>
+              <TaskComposer onAdd={handleCreateTask} selectedDate={selectedDate} />
+            </div>
             <button
               onClick={handleCarryForward}
               style={{
@@ -174,27 +271,24 @@ const App = () => {
                 background: "#e0e7ff",
                 color: "#312e81",
                 borderRadius: "999px",
-                padding: "0.35rem 0.9rem",
+                padding: "0.55rem 1.2rem",
                 cursor: "pointer",
                 fontWeight: 600,
+                alignSelf: "flex-end",
               }}
             >
-              Carry forward incomplete
+              Carry incomplete tomorrow
             </button>
           </div>
-          {carryForwardStatus && <small style={{ color: "#475569" }}>{carryForwardStatus}</small>}
-          <TaskList
-            tasks={tasks}
-            onToggle={toggleTaskStatus}
-            onReorder={reorderTasks}
-            onAsk={(task) => handleAskForTask(task.title)}
-            dateFilter={today}
-            title="Focus for Today"
-          />
-          <TaskComposer onAdd={addTask} />
         </div>
 
-        <BriefPreview brief={brief} onGenerate={generateBrief} onAddSuggestion={handleAddRecommendation} />
+        <BriefPreview
+          recommendations={recommendations}
+          onGenerate={refreshRecommendations}
+          onAddSuggestion={handleAddRecommendation}
+          isLoading={isFetchingRecommendations}
+          statusMessage={recommendationsError}
+        />
 
         <PdfUploadCard
           statusMessage={uploadStatus.message}
@@ -208,6 +302,10 @@ const App = () => {
     </div>
   );
 
+  const onboardingDefaults: Goal & { timezone?: string; fullName?: string } = goal
+    ? { ...goal, fullName, timezone }
+    : { primaryGoal: "", fullName, timezone };
+
   const settingsView = (
     <div className="section-stack">
       <header>
@@ -219,11 +317,7 @@ const App = () => {
       </header>
 
       <OnboardingForm
-        defaultValues={{
-          ...goal,
-          fullName,
-          timezone,
-        }}
+        defaultValues={onboardingDefaults}
         onSubmit={handleGoalSubmit}
       />
 
